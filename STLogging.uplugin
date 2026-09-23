@@ -1,0 +1,18 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "ST Logging",
+	"Description": "Context-aware logging: auto class/function prefix, live-reference log contexts, inline value substitution and per-class log descriptions.",
+	"Category": "Other",
+	"CreatedBy": "Stone Thunder",
+	"CanContainContent": false,
+	"IsBetaVersion": true,
+	"Modules": [
+		{
+			"Name": "STLogging",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
