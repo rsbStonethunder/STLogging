@@ -4,3 +4,4 @@
 #include "STStringify.h"
 #include "STLogContext.h"
 #include "STLogFormat.h"
+#include "STLogMacros.h"
