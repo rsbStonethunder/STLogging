@@ -4,7 +4,7 @@ namespace STLogging
 {
 namespace
 {
-thread_local int32 GNestingDepth = 0;
+thread_local TArray<const void*> GActivePath;
 
 void CollectLeaves(const FSTLogField& Field, const FString& Path, TArray<TPair<FString, FString>>& Out)
 {
@@ -33,19 +33,26 @@ FString JoinedLeaves(const FSTLogField& Field)
 }
 }
 
-FSTNestingGuard::FSTNestingGuard()
+FSTNestingGuard::FSTNestingGuard(const void* InObject)
+	: Object(InObject)
 {
-	++GNestingDepth;
+	GActivePath.Add(Object);
 }
 
 FSTNestingGuard::~FSTNestingGuard()
 {
-	--GNestingDepth;
+	GActivePath.Pop();
+}
+
+bool FSTNestingGuard::IsCycle() const
+{
+	// This guard's own entry is last; any earlier match means Object is already on the path.
+	return GActivePath.IndexOfByKey(Object) != GActivePath.Num() - 1;
 }
 
 bool FSTNestingGuard::IsTooDeep() const
 {
-	return GNestingDepth > MaxNestingDepth;
+	return GActivePath.Num() > MaxNestingDepth;
 }
 
 FString RenderDump(const FSTLogField& Field)

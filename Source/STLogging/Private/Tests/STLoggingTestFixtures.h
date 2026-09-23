@@ -68,4 +68,25 @@ struct FNode : public ISTLoggable
 		};
 	}
 };
+
+// A tree node with a back-link to its parent and several children: the shape that
+// makes depth-limited-only cycle handling blow up combinatorially.
+struct FTreeNode : public ISTLoggable
+{
+	FString Name;
+	const FTreeNode* Parent = nullptr;
+	TArray<const FTreeNode*> Children;
+
+	virtual TArray<FSTLogField> GetLogFields() const override
+	{
+		TArray<FSTLogField> Fields;
+		Fields.Add({ TEXT("Name"), Name, {} });
+		Fields.Add(STLogging::MakeNestedField(TEXT("Parent"), Parent));
+		for (int32 i = 0; i < Children.Num(); ++i)
+		{
+			Fields.Add(STLogging::MakeNestedField(FString::Printf(TEXT("Child%d"), i), Children[i]));
+		}
+		return Fields;
+	}
+};
 }

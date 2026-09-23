@@ -39,7 +39,7 @@ class UMyObject : public UObject, public ISTLoggable
 };
 ```
 
-Output: `Obj.Count: 3, Obj.Child.Name: Foo`. Null pointers render `null`; cycles stop at depth 8 with `<max depth>`.
+Output: `Obj.Count: 3, Obj.Child.Name: Foo`. Null pointers render `null`; an object already being expanded (a cycle or parent back-link) renders `<cycle>`; nesting deeper than 8 renders `<max depth>`.
 Dispatch is by static type: a variable declared as `UObject*` prints its name even if the object implements `ISTLoggable`; declare it as the concrete type to expand fields. Supported pointer types: `T*`, `TObjectPtr<T>`, `TWeakObjectPtr<T>`. Add `Stringify(const T&)` overloads for your own value types.
 
 ## Testing

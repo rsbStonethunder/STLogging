@@ -80,12 +80,56 @@ bool FSTTreeCycleTest::RunTest(const FString& Parameters)
 	B.Next = &A;
 
 	const FString First = STLogging::RenderDump(STLogging::MakeNestedField(TEXT("Start"), &A));
-	TestTrue(TEXT("starts with the real values"), First.StartsWith(TEXT("Start.Name: A, Start.Next.Name: B, Start.Next.Next.Name: A")));
-	TestTrue(TEXT("terminates at the depth limit"), First.Contains(TEXT("<max depth>")));
+	TestEqual(TEXT("stops at the first repeated object"), First,
+		FString(TEXT("Start.Name: A, Start.Next.Name: B, Start.Next.Next: <cycle>")));
 
 	// A guard that failed to unwind would change the second result.
 	const FString Second = STLogging::RenderDump(STLogging::MakeNestedField(TEXT("Start"), &A));
 	TestEqual(TEXT("repeatable"), Second, First);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTTreeDepthLimitTest, "STLogging.Tree.DepthLimitBackstop", ST_TEST_FLAGS)
+bool FSTTreeDepthLimitTest::RunTest(const FString& Parameters)
+{
+	// A long chain of DISTINCT objects has no cycle, so only the depth limit can stop it.
+	FNode Chain[12];
+	for (int32 i = 0; i < 12; ++i)
+	{
+		Chain[i].Name = FString::FromInt(i);
+		Chain[i].Next = (i + 1 < 12) ? &Chain[i + 1] : nullptr;
+	}
+	const FString Dump = STLogging::RenderDump(STLogging::MakeNestedField(TEXT("Start"), &Chain[0]));
+	TestTrue(TEXT("depth limit reached"), Dump.Contains(TEXT("<max depth>")));
+	TestFalse(TEXT("not reported as a cycle"), Dump.Contains(TEXT("<cycle>")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTTreeBackLinkTest, "STLogging.Tree.ParentBackLinksStayCompact", ST_TEST_FLAGS)
+bool FSTTreeBackLinkTest::RunTest(const FString& Parameters)
+{
+	FTreeNode Root;
+	Root.Name = TEXT("R");
+	FTreeNode C0;
+	C0.Name = TEXT("C0");
+	FTreeNode C1;
+	C1.Name = TEXT("C1");
+	FTreeNode C2;
+	C2.Name = TEXT("C2");
+	FTreeNode* Kids[] = { &C0, &C1, &C2 };
+	for (FTreeNode* Kid : Kids)
+	{
+		Kid->Parent = &Root;
+		Root.Children.Add(Kid);
+	}
+
+	// Every child points back at the root, which points at every child. Output must be
+	// proportional to the number of objects, not to (links per node)^depth.
+	const FString Dump = STLogging::RenderDump(STLogging::MakeNestedField(TEXT("Tree"), &Root));
+	TestEqual(TEXT("exact compact output"), Dump,
+		FString(TEXT("Tree.Name: R, Tree.Parent: null, Tree.Child0.Name: C0, Tree.Child0.Parent: <cycle>, ")
+			TEXT("Tree.Child1.Name: C1, Tree.Child1.Parent: <cycle>, ")
+			TEXT("Tree.Child2.Name: C2, Tree.Child2.Parent: <cycle>")));
 	return true;
 }
 

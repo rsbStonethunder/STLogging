@@ -23,13 +23,21 @@ namespace STLogging
 {
 constexpr int32 MaxNestingDepth = 8;
 
-// RAII counter of active nested GetLogFields() expansions on this thread.
+// RAII record of the objects whose GetLogFields() expansion is in progress on this
+// thread (the current path from the root). Detects re-entry into an object already on
+// the path (a cycle) and runaway depth.
 class STLOGGING_API FSTNestingGuard
 {
 public:
-	FSTNestingGuard();
+	explicit FSTNestingGuard(const void* Object);
 	~FSTNestingGuard();
+
+	// True if Object was already being expanded further up the current path.
+	bool IsCycle() const;
 	bool IsTooDeep() const;
+
+private:
+	const void* Object;
 };
 
 template <typename T>
@@ -55,7 +63,11 @@ FSTLogField MakeNestedField(FString Name, const T* Obj)
 		return FSTLogField{ MoveTemp(Name), TEXT("null"), {} };
 	}
 
-	FSTNestingGuard Guard;
+	FSTNestingGuard Guard(static_cast<const ISTLoggable*>(Obj));
+	if (Guard.IsCycle())
+	{
+		return FSTLogField{ MoveTemp(Name), TEXT("<cycle>"), {} };
+	}
 	if (Guard.IsTooDeep())
 	{
 		return FSTLogField{ MoveTemp(Name), TEXT("<max depth>"), {} };
