@@ -44,9 +44,12 @@ Dispatch is by static type: a variable declared as `UObject*` prints its name ev
 
 ## Testing
 
+The plugin is tested inside a host project (see the host repo's README) with the plugin cloned into its `Plugins/` folder. Test code lives in the editor-only `STLoggingTests` module.
+
 ```
-pwsh -File Scripts/Run-STLoggingTests.ps1             # Automation tests (STLogging.*)
-pwsh -File Scripts/Run-Smoke.ps1                      # real-UObject smoke commandlet
+pwsh -File Scripts/Run-Tests.ps1      # Automation tests (STLogging.*)
+pwsh -File Scripts/Run-Smoke.ps1      # real-UObject smoke commandlet
+pwsh -File Scripts/Run-LogTest.ps1    # STLogTest commandlet: 15 scenarios covering every branch, real logs, checked output
 ```
 
-Set `UE_ENGINE_ROOT` to use an engine other than `C:\Program Files\Epic Games\UE_5.8`.
+Set `UE_ENGINE_ROOT` to use an engine other than `C:\Program Files\Epic Games\UE_5.8`, or `PLUGIN_HOST` if the host project is not three levels above the scripts.

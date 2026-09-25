@@ -13,6 +13,11 @@
 			"Name": "STLogging",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "STLoggingTests",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	]
 }
