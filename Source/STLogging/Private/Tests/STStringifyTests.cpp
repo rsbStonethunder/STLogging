@@ -11,6 +11,25 @@ enum class ETestEnum : uint8
 {
 	Alpha = 3,
 };
+
+// Has only a member ToString(); no Stringify overload, not ISTLoggable.
+struct FToStringOnly
+{
+	FString ToString() const { return TEXT("tso"); }
+};
+
+// Has only a free LexToString(); no member ToString(), no Stringify overload.
+struct FLexToStringOnly
+{
+};
+inline FString LexToString(const FLexToStringOnly&) { return TEXT("lex"); }
+
+// Has both an explicit Stringify overload and a ToString(); the overload must win.
+struct FExplicitOverloadWins
+{
+	FString ToString() const { return TEXT("should-not-see-this"); }
+};
+inline FString Stringify(const FExplicitOverloadWins&) { return TEXT("explicit"); }
 }
 
 // A pointer must never be accepted as a bool (it would silently print "true").
@@ -30,6 +49,19 @@ bool FSTStringifyNumbersTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("true"), STLogging::Stringify(true), FString(TEXT("true")));
 	TestEqual(TEXT("false"), STLogging::Stringify(false), FString(TEXT("false")));
 	TestEqual(TEXT("enum prints its number"), STLogging::Stringify(ETestEnum::Alpha), FString(TEXT("3")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTStringifyFallbackTest, "STLogging.Stringify.Fallbacks", ST_TEST_FLAGS)
+bool FSTStringifyFallbackTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("ToString() fallback"), STLogging::Stringify(FToStringOnly()), FString(TEXT("tso")));
+	TestEqual(TEXT("LexToString() fallback"), STLogging::Stringify(FLexToStringOnly()), FString(TEXT("lex")));
+	// Via BuildField (not a qualified STLogging::Stringify(...) call) so the explicit
+	// overload, found only through ADL into STLoggingTests, is actually in the candidate set.
+	FExplicitOverloadWins ExplicitWins;
+	TestEqual(TEXT("explicit Stringify overload wins over ToString()"), STLogging::BuildField(TEXT("X"), ExplicitWins).Value, FString(TEXT("explicit")));
+	TestEqual(TEXT("reflected UENUM prints by name"), STLogging::Stringify(ESTReflectedTestEnum::Beta), FString(TEXT("Beta")));
 	return true;
 }
 
@@ -99,6 +131,33 @@ bool FSTBuildFieldObjectTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("TWeakObjectPtr unset"), STLogging::BuildField(TEXT("O"), WeakUnset).Value, FString(TEXT("null")));
 	TWeakObjectPtr<UObject> WeakLive = Live;
 	TestEqual(TEXT("TWeakObjectPtr live"), STLogging::BuildField(TEXT("O"), WeakLive).Value, LiveName);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTBuildFieldPrecisionTest, "STLogging.BuildField.Precision", ST_TEST_FLAGS)
+bool FSTBuildFieldPrecisionTest::RunTest(const FString& Parameters)
+{
+	const float Speed = 12.3456f;
+	TestEqual(TEXT("float, precision 2"), STLogging::BuildField(TEXT("Speed"), Speed, 2).Value, FString(TEXT("12.35")));
+	TestEqual(TEXT("float, no precision unaffected"), STLogging::BuildField(TEXT("Speed"), Speed).Value, STLogging::Stringify(Speed));
+
+	const FVector Pos(1.27, 2.24, 3.46);
+	TestEqual(TEXT("FVector, precision 1"), STLogging::BuildField(TEXT("Pos"), Pos, 1).Value, FString(TEXT("X=1.3 Y=2.2 Z=3.5")));
+
+	const FVector2D Pos2D(1.27f, 2.24f);
+	TestEqual(TEXT("FVector2D, precision 1"), STLogging::BuildField(TEXT("Pos2D"), Pos2D, 1).Value, FString(TEXT("X=1.3 Y=2.2")));
+
+	const FVector4 Pos4(1.27f, 2.24f, 3.46f, 4.21f);
+	TestEqual(TEXT("FVector4, precision 1"), STLogging::BuildField(TEXT("Pos4"), Pos4, 1).Value, FString(TEXT("X=1.3 Y=2.2 Z=3.5 W=4.2")));
+
+	const FRotator Rot(1.27f, 2.24f, 3.46f);
+	TestEqual(TEXT("FRotator, precision 1"), STLogging::BuildField(TEXT("Rot"), Rot, 1).Value, FString(TEXT("P=1.3 Y=2.2 R=3.5")));
+
+	const FQuat Quat(1.27f, 2.24f, 3.46f, 4.21f);
+	TestEqual(TEXT("FQuat, precision 1"), STLogging::BuildField(TEXT("Quat"), Quat, 1).Value, FString(TEXT("X=1.3 Y=2.2 Z=3.5 W=4.2")));
+
+	const int32 Health = 5;
+	TestEqual(TEXT("precision ignored for non-float"), STLogging::BuildField(TEXT("Health"), Health, 3).Value, FString(TEXT("5")));
 	return true;
 }
 

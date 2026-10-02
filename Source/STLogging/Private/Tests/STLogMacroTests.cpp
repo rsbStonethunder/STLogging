@@ -48,6 +48,31 @@ void FreeFunction()
 }
 }
 
+namespace
+{
+void AnonNamespaceFunction()
+{
+	ST_LOG(LogSTLoggingTest, Log, "anon-ns");
+}
+
+struct FAnonClass
+{
+	void Method() { ST_LOG(LogSTLoggingTest, Log, "anon-ns-method"); }
+};
+
+void AnonNamespaceFunctionWithLambda()
+{
+	auto L = []() { ST_LOG(LogSTLoggingTest, Log, "anon-ns-lambda"); };
+	L();
+}
+}
+
+void STLoggingTests_TopLevelFunctionWithLambda()
+{
+	auto L = []() { ST_LOG(LogSTLoggingTest, Log, "toplevel-lambda"); };
+	L();
+}
+
 using namespace STLoggingTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTMacroPrefixTest, "STLogging.Macros.FunctionPrefix", ST_TEST_FLAGS)
@@ -66,6 +91,35 @@ bool FSTMacroPrefixTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("instance"), Capture.GetLines()[0].StartsWith(TEXT("[")) && Capture.GetLines()[0].Contains(TEXT("FMacroFixture::InstanceMethod")) && Capture.GetLines()[0].EndsWith(TEXT("] instance")));
 	TestTrue(TEXT("static"), Capture.GetLines()[1].Contains(TEXT("FMacroFixture::StaticMethod")) && Capture.GetLines()[1].EndsWith(TEXT("] static")));
 	TestTrue(TEXT("free function has no class"), Capture.GetLines()[2].Contains(TEXT("FreeFunction")) && !Capture.GetLines()[2].Contains(TEXT("FMacroFixture")) && Capture.GetLines()[2].EndsWith(TEXT("] free")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTMacroCleanPrefixTest, "STLogging.Macros.CleanFunctionNames", ST_TEST_FLAGS)
+bool FSTMacroCleanPrefixTest::RunTest(const FString& Parameters)
+{
+	FLogCapture Capture;
+
+	auto LocalLambda = []() { ST_LOG(LogSTLoggingTest, Log, "local-lambda"); };
+	LocalLambda();
+	AnonNamespaceFunction();
+	FAnonClass{}.Method();
+	AnonNamespaceFunctionWithLambda();
+	STLoggingTests_TopLevelFunctionWithLambda();
+
+	if (!TestEqual(TEXT("line count"), Capture.GetLines().Num(), 5))
+	{
+		return false;
+	}
+	TestTrue(TEXT("lambda collapses to enclosing function"),
+		Capture.GetLines()[0].StartsWith(TEXT("[FSTMacroCleanPrefixTest::RunTest]")));
+	TestTrue(TEXT("anon namespace prefix stripped from a free function"),
+		Capture.GetLines()[1].StartsWith(TEXT("[AnonNamespaceFunction]")));
+	TestTrue(TEXT("anon namespace prefix stripped, class::method kept"),
+		Capture.GetLines()[2].StartsWith(TEXT("[FAnonClass::Method]")));
+	TestTrue(TEXT("anon namespace + lambda both stripped"),
+		Capture.GetLines()[3].StartsWith(TEXT("[AnonNamespaceFunctionWithLambda]")));
+	TestTrue(TEXT("lambda stripped, top-level function kept"),
+		Capture.GetLines()[4].StartsWith(TEXT("[STLoggingTests_TopLevelFunctionWithLambda]")));
 	return true;
 }
 
@@ -152,6 +206,19 @@ bool FSTMacroAddTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTMacroAddValueTest, "STLogging.Macros.AddValue", ST_TEST_FLAGS)
+bool FSTMacroAddValueTest::RunTest(const FString& Parameters)
+{
+	int32 Health = 5;
+	ST_LOG_CONTEXT(Ctx, Health);
+	ST_LOG_ADD_VALUE(Ctx, Doubled, Health * 2);
+	TestEqual(TEXT("computed value alongside a live one"), Ctx.BuildDump(), FString(TEXT("Health: 5, Doubled: 10")));
+
+	Health = 7;
+	TestEqual(TEXT("Health stays live, Doubled stays a snapshot"), Ctx.BuildDump(), FString(TEXT("Health: 7, Doubled: 10")));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTMacroContextDeclTest, "STLogging.Macros.ContextDeclaration", ST_TEST_FLAGS)
 bool FSTMacroContextDeclTest::RunTest(const FString& Parameters)
 {
@@ -165,6 +232,56 @@ bool FSTMacroContextDeclTest::RunTest(const FString& Parameters)
 	FMacroFixture Holder;
 	ST_LOG_ADD(Empty, Holder.Count);
 	TestEqual(TEXT("expression key"), Empty.RenderInline(TEXT("Holder.Count")).Get(TEXT("<unset>")), FString(TEXT("3")));
+	return true;
+}
+
+namespace STLoggingTests
+{
+int32 GOffEvaluations = 0;
+int32 GOffValue = 0;
+
+int32& CountedRef()
+{
+	++GOffEvaluations;
+	return GOffValue;
+}
+
+int32 CountedValue()
+{
+	++GOffEvaluations;
+	return 1;
+}
+}
+
+// The ST_LOG_OFF_* forms are what the public macros become under NO_LOGGING; they are
+// always defined, so this checks them here in a logging build. Fatal can't be exercised
+// without stopping the process.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTMacroCompiledOutTest, "STLogging.Macros.CompiledOutFormsEvaluateNothing", ST_TEST_FLAGS)
+bool FSTMacroCompiledOutTest::RunTest(const FString& Parameters)
+{
+	FLogCapture Capture;
+	GOffEvaluations = 0;
+
+	ST_LOG_OFF_CONTEXT(Ctx, CountedRef());
+	ST_LOG_OFF_CONTEXT(Empty);
+	ST_LOG_OFF_ADD(Ctx, CountedRef(), CountedRef());
+	ST_LOG_OFF_ADD_VALUE(Ctx, Computed, CountedValue() * 2);
+	ST_LOG_OFF_ADD_VALUE(Ctx, Lambda, [] { return CountedValue(); }());
+	ST_LOG_OFF(LogSTLoggingTest, Log, "v={Computed}", Ctx);
+	ST_LOG_OFF(LogSTLoggingTest, Error, "plain");
+	const TCHAR* Message = ST_LOG_OFF_MSG("v={Computed}", Ctx);
+
+	TestEqual(TEXT("no argument expression evaluated"), GOffEvaluations, 0);
+	TestEqual(TEXT("nothing logged"), Capture.GetLines().Num(), 0);
+	TestEqual(TEXT("message is the bare literal"), FString(Message), FString(TEXT("v={Computed}")));
+	TestEqual(TEXT("null context is empty"), sizeof(Ctx), sizeof(FSTNullLogContext));
+
+#if !NO_LOGGING
+	// The same calls through the real macros do evaluate, so the counter is a fair witness.
+	ST_LOG_CONTEXT(Live, CountedRef());
+	ST_LOG_ADD_VALUE(Live, Computed, CountedValue() * 2);
+	TestEqual(TEXT("real macros evaluate each argument once"), GOffEvaluations, 2);
+#endif
 	return true;
 }
 

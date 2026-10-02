@@ -29,15 +29,29 @@ FString BuildLogMessage(const FSTLogFormat& Format, const FSTLogContext& Context
 			continue;
 		}
 
-		// FSTLogFormat guarantees a closing brace exists.
-		int32 End = i + 1;
-		while (Format.Str[End] != TEXT('}'))
+		// FSTLogFormat guarantees a well-formed {Name} or {Name:.N} token from here.
+		int32 NameEnd = i + 1;
+		while (Format.Str[NameEnd] != TEXT('}') && Format.Str[NameEnd] != TEXT(':'))
 		{
-			++End;
+			++NameEnd;
 		}
-		const FString Name(End - i - 1, Format.Str + i + 1);
+		const FString Name(NameEnd - i - 1, Format.Str + i + 1);
 		const FName Key(*Name);
-		const TOptional<FString> Rendered = Context.RenderInline(Key);
+
+		TOptional<int32> Precision;
+		int32 End = NameEnd;
+		if (Format.Str[NameEnd] == TEXT(':'))
+		{
+			int32 DigitsStart = NameEnd + 2; // skip ':' and '.'
+			End = DigitsStart;
+			while (Format.Str[End] != TEXT('}'))
+			{
+				++End;
+			}
+			Precision = FCString::Atoi(*FString(End - DigitsStart, Format.Str + DigitsStart));
+		}
+
+		const TOptional<FString> Rendered = Context.RenderInline(Key, Precision);
 		Message += Rendered.IsSet() ? Rendered.GetValue() : FString::Printf(TEXT("{%s:MISSING}"), *Name);
 		Referenced.Add(Key);
 		i = End + 1;
