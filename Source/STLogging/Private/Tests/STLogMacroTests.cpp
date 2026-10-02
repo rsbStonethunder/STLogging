@@ -235,4 +235,54 @@ bool FSTMacroContextDeclTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace STLoggingTests
+{
+int32 GOffEvaluations = 0;
+int32 GOffValue = 0;
+
+int32& CountedRef()
+{
+	++GOffEvaluations;
+	return GOffValue;
+}
+
+int32 CountedValue()
+{
+	++GOffEvaluations;
+	return 1;
+}
+}
+
+// The ST_LOG_OFF_* forms are what the public macros become under NO_LOGGING; they are
+// always defined, so this checks them here in a logging build. Fatal can't be exercised
+// without stopping the process.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTMacroCompiledOutTest, "STLogging.Macros.CompiledOutFormsEvaluateNothing", ST_TEST_FLAGS)
+bool FSTMacroCompiledOutTest::RunTest(const FString& Parameters)
+{
+	FLogCapture Capture;
+	GOffEvaluations = 0;
+
+	ST_LOG_OFF_CONTEXT(Ctx, CountedRef());
+	ST_LOG_OFF_CONTEXT(Empty);
+	ST_LOG_OFF_ADD(Ctx, CountedRef(), CountedRef());
+	ST_LOG_OFF_ADD_VALUE(Ctx, Computed, CountedValue() * 2);
+	ST_LOG_OFF_ADD_VALUE(Ctx, Lambda, [] { return CountedValue(); }());
+	ST_LOG_OFF(LogSTLoggingTest, Log, "v={Computed}", Ctx);
+	ST_LOG_OFF(LogSTLoggingTest, Error, "plain");
+	const TCHAR* Message = ST_LOG_OFF_MSG("v={Computed}", Ctx);
+
+	TestEqual(TEXT("no argument expression evaluated"), GOffEvaluations, 0);
+	TestEqual(TEXT("nothing logged"), Capture.GetLines().Num(), 0);
+	TestEqual(TEXT("message is the bare literal"), FString(Message), FString(TEXT("v={Computed}")));
+	TestEqual(TEXT("null context is empty"), sizeof(Ctx), sizeof(FSTNullLogContext));
+
+#if !NO_LOGGING
+	// The same calls through the real macros do evaluate, so the counter is a fair witness.
+	ST_LOG_CONTEXT(Live, CountedRef());
+	ST_LOG_ADD_VALUE(Live, Computed, CountedValue() * 2);
+	TestEqual(TEXT("real macros evaluate each argument once"), GOffEvaluations, 2);
+#endif
+	return true;
+}
+
 #endif
