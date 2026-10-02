@@ -14,7 +14,7 @@ void FSTLogContext::SetEntry(FName Key, const FSTLogValue& Entry)
 	Entries.Emplace(Key, Entry);
 }
 
-TOptional<FString> FSTLogContext::RenderInline(FName Key) const
+TOptional<FString> FSTLogContext::RenderInline(FName Key, TOptional<int32> Precision) const
 {
 	for (const TPair<FName, FSTLogValue>& Existing : Entries)
 	{
@@ -22,7 +22,7 @@ TOptional<FString> FSTLogContext::RenderInline(FName Key) const
 		{
 			continue;
 		}
-		return STLogging::RenderInline(Existing.Value.BuildFn(Existing.Key.ToString(), Existing.Value.Ptr));
+		return STLogging::RenderInline(Existing.Value.BuildFn(Existing.Key.ToString(), Existing.Value.Ptr, Precision));
 	}
 	return {};
 }
@@ -36,7 +36,7 @@ FString FSTLogContext::BuildDump(const TSet<FName>& ExcludeKeys) const
 		{
 			continue;
 		}
-		Parts.Add(STLogging::RenderDump(Existing.Value.BuildFn(Existing.Key.ToString(), Existing.Value.Ptr)));
+		Parts.Add(STLogging::RenderDump(Existing.Value.BuildFn(Existing.Key.ToString(), Existing.Value.Ptr, {})));
 	}
 	return FString::Join(Parts, TEXT(", "));
 }

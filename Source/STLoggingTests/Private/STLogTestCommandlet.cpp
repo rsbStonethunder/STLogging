@@ -21,6 +21,12 @@ static_assert(!STLogging::IsValidFormatLiteral(TEXT("A}")));
 static_assert(!STLogging::IsValidFormatLiteral(TEXT("{A{B}")));
 static_assert(!STLogging::IsValidFormatLiteral(TEXT("{{{A")));
 
+// Everything below depends on capturing and byte-comparing real UE_LOG output, which
+// UE_LOG itself compiles away for non-Fatal verbosities under NO_LOGGING (e.g. Shipping) -
+// there is nothing to capture, and FLogCategory degrades to FNoLoggingCategory (no
+// GetCategoryName()/SetVerbosity()), so this whole scenario suite is Dev-build-only.
+#if !NO_LOGGING
+
 namespace
 {
 enum class ETestMode : uint8 { Off = 0, On = 7 };
@@ -455,8 +461,14 @@ const FScenario GScenarios[] = {
 #undef ST_SCENARIO
 }
 
+#endif // !NO_LOGGING
+
 int32 USTLogTestCommandlet::Main(const FString& Params)
 {
+#if NO_LOGGING
+	UE_LOG(LogSTLoggingTestReport, Display, TEXT("STLogTest skipped: NO_LOGGING"));
+	return 0;
+#else
 	LogSTLoggingTest.SetVerbosity(ELogVerbosity::VeryVerbose); // let the Verbose scenario through
 
 	FCaptureDevice Capture;
@@ -501,4 +513,5 @@ int32 USTLogTestCommandlet::Main(const FString& Params)
 
 	UE_LOG(LogSTLoggingTestReport, Display, TEXT("STLogTest: %d scenarios, %d failed"), UE_ARRAY_COUNT(GScenarios), Failures);
 	return Failures == 0 ? 0 : 1;
+#endif // NO_LOGGING
 }

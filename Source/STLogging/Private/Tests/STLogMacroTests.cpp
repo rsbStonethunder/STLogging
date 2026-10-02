@@ -48,6 +48,31 @@ void FreeFunction()
 }
 }
 
+namespace
+{
+void AnonNamespaceFunction()
+{
+	ST_LOG(LogSTLoggingTest, Log, "anon-ns");
+}
+
+struct FAnonClass
+{
+	void Method() { ST_LOG(LogSTLoggingTest, Log, "anon-ns-method"); }
+};
+
+void AnonNamespaceFunctionWithLambda()
+{
+	auto L = []() { ST_LOG(LogSTLoggingTest, Log, "anon-ns-lambda"); };
+	L();
+}
+}
+
+void STLoggingTests_TopLevelFunctionWithLambda()
+{
+	auto L = []() { ST_LOG(LogSTLoggingTest, Log, "toplevel-lambda"); };
+	L();
+}
+
 using namespace STLoggingTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTMacroPrefixTest, "STLogging.Macros.FunctionPrefix", ST_TEST_FLAGS)
@@ -66,6 +91,35 @@ bool FSTMacroPrefixTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("instance"), Capture.GetLines()[0].StartsWith(TEXT("[")) && Capture.GetLines()[0].Contains(TEXT("FMacroFixture::InstanceMethod")) && Capture.GetLines()[0].EndsWith(TEXT("] instance")));
 	TestTrue(TEXT("static"), Capture.GetLines()[1].Contains(TEXT("FMacroFixture::StaticMethod")) && Capture.GetLines()[1].EndsWith(TEXT("] static")));
 	TestTrue(TEXT("free function has no class"), Capture.GetLines()[2].Contains(TEXT("FreeFunction")) && !Capture.GetLines()[2].Contains(TEXT("FMacroFixture")) && Capture.GetLines()[2].EndsWith(TEXT("] free")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTMacroCleanPrefixTest, "STLogging.Macros.CleanFunctionNames", ST_TEST_FLAGS)
+bool FSTMacroCleanPrefixTest::RunTest(const FString& Parameters)
+{
+	FLogCapture Capture;
+
+	auto LocalLambda = []() { ST_LOG(LogSTLoggingTest, Log, "local-lambda"); };
+	LocalLambda();
+	AnonNamespaceFunction();
+	FAnonClass{}.Method();
+	AnonNamespaceFunctionWithLambda();
+	STLoggingTests_TopLevelFunctionWithLambda();
+
+	if (!TestEqual(TEXT("line count"), Capture.GetLines().Num(), 5))
+	{
+		return false;
+	}
+	TestTrue(TEXT("lambda collapses to enclosing function"),
+		Capture.GetLines()[0].StartsWith(TEXT("[FSTMacroCleanPrefixTest::RunTest]")));
+	TestTrue(TEXT("anon namespace prefix stripped from a free function"),
+		Capture.GetLines()[1].StartsWith(TEXT("[AnonNamespaceFunction]")));
+	TestTrue(TEXT("anon namespace prefix stripped, class::method kept"),
+		Capture.GetLines()[2].StartsWith(TEXT("[FAnonClass::Method]")));
+	TestTrue(TEXT("anon namespace + lambda both stripped"),
+		Capture.GetLines()[3].StartsWith(TEXT("[AnonNamespaceFunctionWithLambda]")));
+	TestTrue(TEXT("lambda stripped, top-level function kept"),
+		Capture.GetLines()[4].StartsWith(TEXT("[STLoggingTests_TopLevelFunctionWithLambda]")));
 	return true;
 }
 
@@ -149,6 +203,19 @@ bool FSTMacroAddTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("sixteen count"), Sixteen.Num(), 16);
 	TestEqual(TEXT("sixteen order"), Sixteen.BuildDump(),
 		FString(TEXT("v1: 1, v2: 2, v3: 3, v4: 4, v5: 5, v6: 6, v7: 7, v8: 8, v9: 9, v10: 10, v11: 11, v12: 12, v13: 13, v14: 14, v15: 15, v16: 16")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTMacroAddValueTest, "STLogging.Macros.AddValue", ST_TEST_FLAGS)
+bool FSTMacroAddValueTest::RunTest(const FString& Parameters)
+{
+	int32 Health = 5;
+	ST_LOG_CONTEXT(Ctx, Health);
+	ST_LOG_ADD_VALUE(Ctx, Doubled, Health * 2);
+	TestEqual(TEXT("computed value alongside a live one"), Ctx.BuildDump(), FString(TEXT("Health: 5, Doubled: 10")));
+
+	Health = 7;
+	TestEqual(TEXT("Health stays live, Doubled stays a snapshot"), Ctx.BuildDump(), FString(TEXT("Health: 7, Doubled: 10")));
 	return true;
 }
 

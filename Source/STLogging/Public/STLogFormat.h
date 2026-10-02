@@ -10,7 +10,13 @@ namespace STLogging
 // compiler error names this function.
 STLOGGING_API void STLOG_FORMAT_STRING_IS_INVALID_check_braces();
 
-// Valid: {Name} (non-empty, no braces inside), and the escapes {{ and }}.
+constexpr bool IsAsciiDigit(TCHAR C)
+{
+	return C >= TEXT('0') && C <= TEXT('9');
+}
+
+// Valid: {Name} and {Name:.N} (non-empty Name, no braces inside, N one or more digits),
+// and the escapes {{ and }}.
 constexpr bool IsValidFormat(const TCHAR* Str, int32 Len)
 {
 	int32 i = 0;
@@ -25,15 +31,35 @@ constexpr bool IsValidFormat(const TCHAR* Str, int32 Len)
 				continue;
 			}
 			int32 j = i + 1;
-			while (j < Len && Str[j] != TEXT('}') && Str[j] != TEXT('{'))
+			while (j < Len && Str[j] != TEXT('}') && Str[j] != TEXT('{') && Str[j] != TEXT(':'))
 			{
 				++j;
 			}
-			if (j >= Len || Str[j] != TEXT('}'))
+			if (j == i + 1)
 			{
 				return false;
 			}
-			if (j == i + 1)
+			if (j < Len && Str[j] == TEXT(':'))
+			{
+				int32 k = j + 1;
+				if (k >= Len || Str[k] != TEXT('.'))
+				{
+					return false;
+				}
+				++k;
+				const int32 DigitsStart = k;
+				while (k < Len && IsAsciiDigit(Str[k]))
+				{
+					++k;
+				}
+				if (k == DigitsStart || k >= Len || Str[k] != TEXT('}'))
+				{
+					return false;
+				}
+				i = k + 1;
+				continue;
+			}
+			if (j >= Len || Str[j] != TEXT('}'))
 			{
 				return false;
 			}

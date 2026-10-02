@@ -3,8 +3,16 @@
 #include "CoreMinimal.h"
 #include "Misc/AutomationTest.h"
 #include "STLogTypes.h"
+#include "STLoggingTestFixtures.generated.h"
 
 #define ST_TEST_FLAGS (EAutomationTestFlags::EditorContext | EAutomationTestFlags::ProductFilter)
+
+// Reflected so STLogging::Stringify can print it by name instead of by number.
+UENUM()
+enum class ESTReflectedTestEnum : uint8
+{
+	Beta = 5,
+};
 
 namespace STLoggingTests
 {

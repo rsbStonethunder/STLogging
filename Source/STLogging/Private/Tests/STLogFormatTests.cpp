@@ -18,6 +18,15 @@ static_assert(!STLogging::IsValidFormatLiteral(TEXT("nested {a{b}}")));
 static_assert(!STLogging::IsValidFormatLiteral(TEXT("unterminated {abc")));
 static_assert(!STLogging::IsValidFormatLiteral(TEXT("{a}}")));
 
+static_assert(STLogging::IsValidFormatLiteral(TEXT("{Speed:.2}")));
+static_assert(STLogging::IsValidFormatLiteral(TEXT("{Speed:.10}")));
+static_assert(STLogging::IsValidFormatLiteral(TEXT("a {Speed:.2} b {Health}")));
+static_assert(!STLogging::IsValidFormatLiteral(TEXT("{Speed:}")));
+static_assert(!STLogging::IsValidFormatLiteral(TEXT("{Speed:2}")));
+static_assert(!STLogging::IsValidFormatLiteral(TEXT("{Speed:.}")));
+static_assert(!STLogging::IsValidFormatLiteral(TEXT("{Speed:.2x}")));
+static_assert(!STLogging::IsValidFormatLiteral(TEXT("{Speed:.2")));
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTFormatInlineTest, "STLogging.Format.InlineSubstitution", ST_TEST_FLAGS)
 bool FSTFormatInlineTest::RunTest(const FString& Parameters)
 {
@@ -103,6 +112,29 @@ bool FSTFormatCompositeTest::RunTest(const FString& Parameters)
 	Leaf.Count = 8;
 	TestEqual(TEXT("live after mutation"),
 		STLogging::BuildLogMessage(STLogging::FSTLogFormat(TEXT("o={Obj}")), Ctx), FString(TEXT("o={Obj.Count: 8, Obj.Label: L}")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTFormatPrecisionTest, "STLogging.Format.Precision", ST_TEST_FLAGS)
+bool FSTFormatPrecisionTest::RunTest(const FString& Parameters)
+{
+	float Speed = 12.3456f;
+	int32 Health = 5;
+	FVector Pos(1.2345f, 2.3456f, 3.4567f);
+	FSTLogContext Ctx;
+	Ctx.Add(TEXT("Speed"), Speed);
+	Ctx.Add(TEXT("Health"), Health);
+	Ctx.Add(TEXT("Pos"), Pos);
+
+	const FString SpeedMsg = STLogging::BuildLogMessage(STLogging::FSTLogFormat(TEXT("v={Speed:.2}")), Ctx);
+	TestTrue(TEXT("float precision"), SpeedMsg.StartsWith(TEXT("v=12.35 {")));
+
+	const FString PosMsg = STLogging::BuildLogMessage(STLogging::FSTLogFormat(TEXT("p={Pos:.1}")), Ctx);
+	TestTrue(TEXT("vector precision, each component"), PosMsg.StartsWith(TEXT("p=X=1.2 Y=2.3 Z=3.5 {")));
+
+	const FString HealthMsg = STLogging::BuildLogMessage(STLogging::FSTLogFormat(TEXT("h={Health:.3}")), Ctx);
+	TestTrue(TEXT("precision on non-float value is ignored"), HealthMsg.StartsWith(TEXT("h=5 {")));
+
 	return true;
 }
 

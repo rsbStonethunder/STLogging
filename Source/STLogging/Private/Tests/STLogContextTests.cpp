@@ -112,4 +112,34 @@ bool FSTContextLookupTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTContextPrecisionTest, "STLogging.Context.Precision", ST_TEST_FLAGS)
+bool FSTContextPrecisionTest::RunTest(const FString& Parameters)
+{
+	float Speed = 12.3456f;
+	FSTLogContext Ctx;
+	Ctx.Add(TEXT("Speed"), Speed);
+
+	TestEqual(TEXT("with precision"), Ctx.RenderInline(TEXT("Speed"), 2).Get(TEXT("<unset>")), FString(TEXT("12.35")));
+	TestEqual(TEXT("without precision unaffected"), Ctx.RenderInline(TEXT("Speed")).Get(TEXT("<unset>")), STLogging::Stringify(Speed));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSTContextAddValueTest, "STLogging.Context.AddValue", ST_TEST_FLAGS)
+bool FSTContextAddValueTest::RunTest(const FString& Parameters)
+{
+	int32 Health = 5;
+	FSTLogContext Ctx;
+	Ctx.AddValue(TEXT("Doubled"), Health * 2);
+	TestEqual(TEXT("computed rvalue"), Ctx.RenderInline(TEXT("Doubled")).Get(TEXT("<unset>")), FString(TEXT("10")));
+
+	Ctx.AddValue(TEXT("Snapshot"), Health);
+	Health = 99;
+	TestEqual(TEXT("lvalue is copied, not a live reference"), Ctx.RenderInline(TEXT("Snapshot")).Get(TEXT("<unset>")), FString(TEXT("5")));
+
+	Ctx.AddValue(TEXT("Snapshot"), Health);
+	TestEqual(TEXT("re-add rebinds the key"), Ctx.RenderInline(TEXT("Snapshot")).Get(TEXT("<unset>")), FString(TEXT("99")));
+	TestEqual(TEXT("re-add does not duplicate the entry"), Ctx.Num(), 2);
+	return true;
+}
+
 #endif

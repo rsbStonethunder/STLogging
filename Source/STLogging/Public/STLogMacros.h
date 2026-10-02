@@ -4,6 +4,7 @@
 #include "Logging/LogMacros.h"
 #include "STLogContext.h"
 #include "STLogFormat.h"
+#include "STLogFunctionName.h"
 
 // ---- preprocessor helpers (conforming preprocessor; UBT enables /Zc:preprocessor) ----
 
@@ -35,7 +36,16 @@
 // ---- public macros ----
 
 // Stores a live reference to X under the key "X". X must be an lvalue.
+// Under NO_LOGGING (e.g. Shipping), UE_LOG itself compiles down to near-nothing for
+// non-Fatal verbosities, but ST_LOG_CONTEXT/ST_LOG_ADD are separate statements that run
+// regardless - without this, every FName lookup and TArray growth they do would survive
+// into Shipping for a context that can never be logged. X is still referenced (as a
+// discarded value) so this doesn't change whether it's an unused-variable warning.
+#if NO_LOGGING
+#define ST_LOG_ADD_ONE(C, X) (void)(X);
+#else
 #define ST_LOG_ADD_ONE(C, X) (C).Add(FName(TEXT(#X)), X);
+#endif
 
 // Adds 1-16 variables to an existing context.
 #define ST_LOG_ADD(Ctx, ...) \
@@ -45,6 +55,15 @@
 #define ST_LOG_CONTEXT(Ctx, ...) \
 	FSTLogContext Ctx; \
 	__VA_OPT__(ST_LOG_ADD(Ctx, __VA_ARGS__))
+
+// Adds a computed value under Key (a bare name, stringized like ST_LOG_ADD's variables) -
+// for a value with no local to take a live reference to. A snapshot, not live: see AddValue().
+// See ST_LOG_ADD_ONE above for why this is a no-op under NO_LOGGING.
+#if NO_LOGGING
+#define ST_LOG_ADD_VALUE(Ctx, Key, Expr) (void)(Expr)
+#else
+#define ST_LOG_ADD_VALUE(Ctx, Key, Expr) (Ctx).AddValue(FName(TEXT(#Key)), (Expr))
+#endif
 
 #define ST_LOG_MSG_1(Format) (TEXT(Format))
 #define ST_LOG_MSG_2(Format, Ctx) (*STLogging::BuildLogMessage(STLogging::FSTLogFormat(TEXT(Format)), Ctx))
@@ -56,4 +75,4 @@
 // literal is compile-time validated, {Name} tokens are substituted, and unreferenced
 // context entries are appended as a dump.
 #define ST_LOG(Category, Verbosity, Format, ...) \
-	UE_LOG(Category, Verbosity, TEXT("[%s] %s"), ANSI_TO_TCHAR(__FUNCTION__), ST_LOG_MSG(Format __VA_OPT__(,) __VA_ARGS__))
+	UE_LOG(Category, Verbosity, TEXT("[%s] %s"), *STLogging::CleanFunctionName(ANSI_TO_TCHAR(__FUNCTION__)), ST_LOG_MSG(Format __VA_OPT__(,) __VA_ARGS__))
