@@ -73,12 +73,19 @@ or on the command line: `-LogCmds="LogTemp Verbose, LogMyGame off"`. A category'
 The plugin is tested inside a host project (see the host repo's README) with the plugin cloned into its `Plugins/` folder. Test code lives in the editor-only `STLoggingTests` module.
 
 ```
-pwsh -File Scripts/Run-Tests.ps1      # Automation tests (STLogging.*)
+pwsh -File Scripts/Run-Tests.ps1      # Automation tests (STLogging.*), including the STLogging.Perf.* benchmarks
+pwsh -File Scripts/Run-Tests.ps1 -Filter STLogging.Perf   # just the benchmarks
 pwsh -File Scripts/Run-Smoke.ps1      # real-UObject smoke commandlet
 pwsh -File Scripts/Run-LogTest.ps1    # STLogTest commandlet: 15 scenarios covering every branch, real logs, checked output
 pwsh -File Scripts/Run-Benchmark.ps1  # ST_LOG vs plain UE_LOG timing, Development editor
 pwsh -File Scripts/Run-Benchmark.ps1 -Shipping  # same, from a packaged Shipping build (see below)
 ```
+
+### Perf tests
+
+`STLogging.Perf.*` (one test per group: Plain, Context, Nested, ContextOnly, FilteredLog, Controls) runs the benchmark scenarios in the editor and reports each as Unreal automation telemetry: data point `<Scenario>.NsPerCall`, appended to `Saved/Automation/Telemetry/STLoggingPerf.csv`, so runs can be compared over time (ProjectTrackr picks these up and charts them). They use `PerfFilter`. `STLogging.Perf.Controls` fails if the direct-context control costs no more than an empty loop, which would mean the optimiser removed the timing loop. `Control_Empty` is logged but not reported as telemetry, since timer noise on a ~0 ns value would read as a large regression.
+
+The scenarios live in the plugin (`STLogBenchmark.h`, `STLogging::Bench::RunScenarios`) and are shared with the host's STLogBench commandlet, which `Run-Benchmark.ps1` uses for the Development and Shipping numbers below.
 
 Set `UE_ENGINE_ROOT` to use an engine other than `C:\Program Files\Epic Games\UE_5.8`, or `PLUGIN_HOST` if the host project is not three levels above the scripts.
 
